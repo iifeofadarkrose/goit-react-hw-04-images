@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import { Searchbar } from './Searchbar/Searchbar';
 import { ImageGallery } from './ImageGallery/ImageGallery';
 import { Modal } from './Modal/Modal';
@@ -6,97 +6,77 @@ import { Button } from './Button/Button';
 import { Loader } from './Loader/Loader';
 import { searchImages } from 'api';
 
-export class App extends Component {
-  state = {
-    searchTerm: '',
-    isShowModal: false,
-    modalImage: '',
-    images: [],
-    isLoading: false,
-    error: null,
-    page: 1,
-    totalImages: 0,
-  };
+  export const App = () => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isShowModal, setIsShowModal] = useState(false);
+  const [modalImage, setModalImage] = useState('');
+  const [images, setImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorType, setErrorType] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalImages, setTotalImages] = useState(0);
 
-  onSubmit = e => {
+  const onSubmit = e => {
     e.preventDefault();
     const query = e.target.elements.searchWord.value.trim().toLowerCase();
     if (!query.length) {
       alert('Please, write a search word');
       return;
     }
-    this.setState({
-      searchTerm: query,
-      images: [],
-      page: 1,
-    });
+    setSearchTerm(query);
+    setImages([]);
+    setPage(1);
     e.target.reset();
   };
 
-  showModal = url => {
-    this.setState({ isShowModal: true });
-    this.setState({ modalImage: url });
+  const showModal = url => {
+    setIsShowModal(true);
+    setModalImage(url);
   };
 
-  closeModal = () => {
-    this.setState({ isShowModal: false });
+  const closeModal = () => setIsShowModal(false);
+
+  const handleLoadMoreButton = () => {
+    setPage(prevState => prevState + 1);
   };
 
-  handleLoadMoreButton = () => {
-    this.setState(prevState => ({ page: prevState.page + 1 }));
-  };
+  useEffect(() => {
+    setIsLoading(true);
+    searchImages(searchTerm, page)
+      .then(response => {
+        if (response.ok) {
+          return response.json();
+        }
+        return Promise.reject(new Error(`Nothing found for ${searchTerm}`));
+      })
+      .then(images => {
+        if (!images.hits.length) {
+          alert('Nothing found');
+        } else {
+          setImages(prevImages => [...prevImages, ...images.hits]);
+          setTotalImages(images.totalHits);
+        }
+      })
+      .catch(error => {
+        setErrorType(error);
+        console.log(errorType);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [searchTerm, page, errorType]);
 
-  componentDidUpdate(_, prevState) {
-    if (
-      prevState.searchTerm !== this.state.searchTerm ||
-      prevState.page !== this.state.page
-    ) {
-      this.setState({ isLoading: true });
-      searchImages(this.state.searchTerm, this.state.page)
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          }
-          return Promise.reject(
-            new Error(`Nothing found for ${this.state.searchTerm}`)
-          );
-        })
-        .then(images => {
-          if (!images.hits.length) {
-            alert('Nothing found');
-          } else {
-            this.setState(prevState => ({
-              images: [...prevState.images, ...images.hits],
-              totalImages: images.totalHits,
-            }));
-          }
-        })
-        .catch(error => {
-          console.log(error);
-          this.setState({ error });
-        })
-        .finally(() => {
-          this.setState({ isLoading: false });
-        });
-    }
-  }
-
-  render() {
-    return (
-      <>
-        <Searchbar onSubmit={this.onSubmit} />
-        {this.state.images.length > 0 && (
-          <ImageGallery images={this.state.images} showModal={this.showModal} />
-        )}
-        {this.state.isLoading && <Loader />}
-        {this.state.isShowModal && (
-          <Modal image={this.state.modalImage} closeModal={this.closeModal} />
-        )}
-        {this.state.totalImages > this.state.images.length &&
-          !this.state.isLoading && (
-            <Button onClick={this.handleLoadMoreButton} />
-          )}
-      </>
-    );
-  }
-}
+  return (
+    <>
+      <Searchbar onSubmit={onSubmit} />
+      {searchTerm && images.length > 0 && (
+        <ImageGallery images={images} showModal={showModal} />
+      )}
+      {isLoading && <Loader />}
+      {isShowModal && <Modal image={modalImage} closeModal={closeModal} />}
+      {searchTerm && totalImages > images.length && !isLoading && (
+        <Button onClick={handleLoadMoreButton} />
+      )}
+    </>
+  );
+};
